@@ -1,0 +1,10 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY latency_exporter_requirements.txt .
+RUN pip install --no-cache-dir -r latency_exporter_requirements.txt
+
+COPY latency_exporter.py .
+
+CMD ["python", "latency_exporter.py"]

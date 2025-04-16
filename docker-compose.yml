@@ -1,0 +1,313 @@
+services:
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper1
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888
+    volumes:
+      - zookeeper-data1:/var/lib/zookeeper/data
+      - zookeeper-log1:/var/lib/zookeeper/log
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka1
+    depends_on:
+      - zookeeper1
+    ports:
+      - "9092:9092"      # For external connections using PLAINTEXT_HOST
+      - "29092:29092"    # For internal Docker connections
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    volumes:
+      - kafka-data1:/var/lib/kafka/data
+     
+  kafka2:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka2
+    depends_on:
+      - zookeeper1
+    ports:
+      - "9093:9092"      # Mapping external port 9093 to container port 9092
+      - "29093:29092"    # Internal listener
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:29092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    volumes:
+      - kafka-data2:/var/lib/kafka/data
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka3
+    depends_on:
+      - zookeeper1
+    ports:
+      - "9094:9092"      # External port 9094 mapped to container port 9092
+      - "29094:29092"    # Internal listener
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:29092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    volumes:
+      - kafka-data3:/var/lib/kafka/data
+
+  # connect:
+  #   image: confluentinc/cp-kafka-connect:7.7.1
+  #   container_name: connect
+  #   hostname: connect
+  #   depends_on:
+  #     - kafka1
+  #     - kafka2
+  #     - kafka3
+  #   environment:
+  #     CONNECT_BOOTSTRAP_SERVERS: kafka1:29092,kafka2:29092,kafka3:29092
+  #     CONNECT_REST_ADVERTISED_HOST_NAME: connect
+  #     CONNECT_GROUP_ID: compose-connect-group
+  #     CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+  #     CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+  #     CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+  #     CONNECT_REST_PORT: 8083
+  #     CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+  #     CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+  #     CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  #     CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  #     CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: false
+  #     CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: false
+  #     CONNECT_PLUGIN_PATH: /usr/share/java,usr/share/confluent-hub-components/kafka-connect-mongodb,/etc/kafka-connect/jars/
+
+  #   ports:
+  #     - "8083:8083"  # Kafka Connect REST API for managing connectors
+  #   volumes:
+  #     # - ./kafka-connect-mongodb:/usr/share/confluent-hub-components/kafka-connect-mongodb 
+  #     - ./connectors:/etc/kafka-connect/jars/
+
+  # schema-registry:
+  #   image: confluentinc/cp-schema-registry:7.7.1
+  #   ports:
+  #     - 8081:8081
+  #   container_name: schema-registry
+  #   depends_on:
+  #     - kafka1
+  #     - kafka2
+  #     - kafka3
+  #   environment:
+  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
+  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:29092,PLAINTEXT://kafka2:29092,PLAINTEXT://kafka3:29092
+  #     SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper1:2181
+  #     SCHEMA_REGISTRY_CUB_KAFKA_TIMEOUT: 300
+
+  # ksqldb-server:
+  #   image: confluentinc/cp-ksqldb-server:7.7.1
+  #   hostname: ksqldb-server
+  #   container_name: ksqldb-server
+  #   depends_on:
+  #     - kafka1
+  #     - kafka2
+  #     - kafka3
+  #     - schema-registry
+  #   ports:
+  #     - "8088:8088"
+  #   environment:
+  #     # Specify the bootstrap servers for your Kafka brokers (internal listener port)
+  #     KSQL_BOOTSTRAP_SERVERS: "kafka1:29092,kafka2:29092,kafka3:29092"
+  #     KSQL_LISTENERS: "http://0.0.0.0:8088"
+  #     KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  #     KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+  #     KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      
+  # ksqldb-cli:
+  #   image: confluentinc/cp-ksqldb-cli:7.7.1
+  #   container_name: ksqldb-cli
+  #   depends_on:
+  #     - ksqldb-server
+  #   entrypoint: /bin/sh
+  #   tty: true
+
+  spark:
+    build: 
+      context: .
+      dockerfile: Dockerfile.PySpark
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    ports:
+      - "8080:8080"   # Spark UI
+      - "7077:7077"   # Spark Master Port
+    volumes:
+      - ./spark_job:/app/spark_job  
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - spark-ivy-cache:/root/.ivy2
+      - check-point:/tmp/kafka-syslog-checkpoint
+
+  spark-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile.PySpark
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      # - SPARK_WORKER_MEMORY=1G     
+      # - SPARK_WORKER_CORES=6
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    volumes:
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - spark-ivy-cache:/root/.ivy2
+      - check-point:/tmp/kafka-syslog-checkpoint
+
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    restart: always
+    environment: 
+    - MONGO_INITDB_DATABASE=logdb
+    - MONGO_INITDB_ROOT_USERNAME=hien
+    - MONGO_INITDB_ROOT_PASSWORD=hien
+    volumes:
+    - mongodb-data:/data/db
+    ports:
+    - "27017:27017"
+    command: ["mongod", "--auth", "--storageEngine", "wiredTiger"]
+
+  syslog-ng:
+    image: balabit/syslog-ng:3.38.1
+    container_name: syslog-ng
+    ports:
+      - "514:514/udp"
+      - "601:601"
+    volumes:
+      - ./syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf
+      - /var/log:/var/log
+    command: ["--no-caps", "-edv"]
+
+
+  prometheus:
+    image: prom/prometheus:v2.46.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # - GF_USERS_ALLOW_SIGN_UP=false
+      - allow_loading_unsigned_plugins=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  latency-exporter:
+    build:
+      context: ./latency-exporter
+      dockerfile: Dockerfile.latency_exporter
+    container_name: latency-exporter
+    ports:
+      - "8000:8000"  # Expose metrics endpoint
+    volumes:
+      - ./latency-exporter:/app
+    environment:
+      - MONGODB_URI=mongodb://hien:hien@mongodb:27017/logdb?authSource=admin
+      - KAFKA_BOOTSTRAP_SERVERS=kafka1:29092,kafka2:29092,kafka3:29092
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - kafka1
+      - kafka2
+      - kafka3
+      
+  # kafka-exporter:
+  #   image: danielqsj/kafka-exporter:latest
+  #   container_name: kafka-exporter
+  #   ports:
+  #     - "9308:9308"
+  #   command:
+  #     - "--kafka.server=kafka1:29092"
+  #     - "--kafka.server=kafka2:29092"
+  #     - "--kafka.server=kafka3:29092"
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - kafka1
+  #     - kafka2
+  #     - kafka3
+
+  # # MongoDB exporter for monitoring MongoDB metrics
+  # mongodb-exporter:
+  #   image: percona/mongodb_exporter:0.40
+  #   container_name: mongodb-exporter
+  #   ports:
+  #     - "9216:9216"
+  #   environment:
+  #     - MONGODB_URI=mongodb://hien:hien@mongodb:27017/admin?authSource=admin
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - mongodb
+ 
+
+
+
+volumes:
+  zookeeper-data1:
+  zookeeper-log1:
+  zookeeper-data2:
+  zookeeper-log2:
+  zookeeper-data3:
+  zookeeper-log3:
+  kafka-data1:
+  kafka-data2:
+  kafka-data3:
+  mongodb-data:
+  spark-ivy-cache:
+  check-point:
+  prometheus-data:
+  grafana-data:
+
+

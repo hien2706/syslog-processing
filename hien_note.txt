@@ -1,0 +1,163 @@
+docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+
+kafka-topics --create --bootstrap-server localhost:29092 --replication-factor 1 --partitions 1 --topic syslog
+
+kafka-topics --create --bootstrap-server kafka1:29092 --replication-factor 3 --partitions 1 --topic syslog
+
+kafka-console-consumer --topic syslog --bootstrap-server kafka1:29092
+kafka-console-consumer --topic SyslogProcessed --bootstrap-server kafka1:29092
+
+echo "This is a test message 2706" | nc -w1 -u localhost 514
+
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.2 /app/spark_job/data_processing_kafka.py
+spark-submit /app/spark_job/data_processing_kafka.py
+
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.2,org.mongodb.spark:mongo-spark-connector_2.12:10.4.1 /app/spark_job/data_processing.py
+
+docker exec -it mongodb mongosh -u hien -p hien --authenticationDatabase admin
+
+mongodb://admin:admin@mongodb:27017/logdb.syslog
+
+
+
+By default, when you deploy the docker-compose file you will get an Apache Spark cluster with 1 master and 1 worker.
+If you want N workers, all you need to do is start the docker-compose deployment with the following command:
+
+docker-compose up --scale spark-worker=3
+
+tranhien@tranhien-Virtual-Machine:~/de_project$ echo "This is a test message" | nc -w1 -u localhost 514
+
+[appuser@885e87578bad ~]$ kafka-console-consumer --topic syslog --bootstrap-server kafka1:29092
+2025-03-17T07:52:02+00:00 tranhien-Virtual-Machine This is a test message  
+
+
+Processing batch: 2
++-------------------------+------------------------+------------------------+
+|timestamp                |hostname                |content                 |
++-------------------------+------------------------+------------------------+
+|2025-03-17T07:52:02+00:00|tranhien-Virtual-Machine|This is a test message  |
++-------------------------+------------------------+------------------------+
+
+{
+    _id: ObjectId('67d7d4a52930c7231f33c743'),
+    timestamp: '2025-03-17T07:52:02+00:00',
+    hostname: 'tranhien-Virtual-Machine',
+    content: 'This is a test message  '
+  }
+
+
+CREATE STREAM syslog_raw (
+  value VARCHAR
+) WITH (
+  KAFKA_TOPIC='syslog',
+  VALUE_FORMAT='DELIMITED'
+);
+
+
+CREATE STREAM syslog_parsed WITH (KAFKA_TOPIC='SyslogProcessed',VALUE_FORMAT='JSON') AS
+SELECT 
+  SPLIT(value, ' ')[1] AS timestamp, 
+  SPLIT(value, ' ')[2] AS hostname,
+  TRIM(SUBSTRING(value, LEN(SPLIT(value, ' ')[1]) + LEN(SPLIT(value, ' ')[2]) + 2)) AS message
+FROM syslog_raw
+EMIT CHANGES;
+
+curl -X POST -H "Content-Type: application/json" \
+  -d @mongo-sink-connector.json \
+  http://localhost:8083/connectors
+
+
+tranhien@tranhien-Virtual-Machine:~/de_project$ tree kafka-connect-mongodb/
+kafka-connect-mongodb/
+├── assets
+│   ├── mongodb-leaf.png
+│   └── mongodb-logo.png
+├── doc
+│   ├── LICENSE.txt
+│   └── README.md
+├── etc
+│   ├── MongoSinkConnector.properties
+│   └── MongoSourceConnector.properties
+├── lib
+│   └── mongo-kafka-connect-1.15.0-confluent.jar
+└── manifest.json
+
+
+
+tranhien@tranhien-Virtual-Machine:~/de_project$ curl http://localhost:8083/connectors/mongo-sink-connector/status
+{"name":"mongo-sink-connector","connector":{"state":"RUNNING","worker_id":"connect:8083"},"tasks":[{"id":0,"state":"FAILED","worker_id":"connect:8083","trace":"org.apache.kafka.connect.errors.ConnectException: Tolerance exceeded in error handler\n\tat org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndHandleError(RetryWithToleranceOperator.java:230)\n\tat org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execute(RetryWithToleranceOperator.java:156)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.convertAndTransformRecord(WorkerSinkTask.java:536)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.convertMessages(WorkerSinkTask.java:513)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.poll(WorkerSinkTask.java:349)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.iteration(WorkerSinkTask.java:250)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.execute(WorkerSinkTask.java:219)\n\tat org.apache.kafka.connect.runtime.WorkerTask.doRun(WorkerTask.java:204)\n\tat org.apache.kafka.connect.runtime.WorkerTask.run(WorkerTask.java:259)\n\tat org.apache.kafka.connect.runtime.isolation.Plugins.lambda$withClassLoader$1(Plugins.java:237)\n\tat java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)\n\tat java.base/java.lang.Thread.run(Thread.java:840)\nCaused by: org.apache.kafka.connect.errors.DataException: Converting byte[] to Kafka Connect data failed due to serialization error: \n\tat org.apache.kafka.connect.json.JsonConverter.toConnectData(JsonConverter.java:333)\n\tat org.apache.kafka.connect.storage.Converter.toConnectData(Converter.java:91)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.lambda$convertAndTransformRecord$4(WorkerSinkTask.java:536)\n\tat org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndRetry(RetryWithToleranceOperator.java:180)\n\tat org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.execAndHandleError(RetryWithToleranceOperator.java:214)\n\t... 14 more\nCaused by: org.apache.kafka.common.errors.SerializationException: com.fasterxml.jackson.core.JsonParseException: Unexpected character (',' (code 44)): expected a value\n at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 2]\n\tat org.apache.kafka.connect.json.JsonDeserializer.deserialize(JsonDeserializer.java:69)\n\tat org.apache.kafka.connect.json.JsonConverter.toConnectData(JsonConverter.java:331)\n\t... 18 more\nCaused by: com.fasterxml.jackson.core.JsonParseException: Unexpected character (',' (code 44)): expected a value\n at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 2]\n\tat com.fasterxml.jackson.core.JsonParser._constructError(JsonParser.java:2481)\n\tat com.fasterxml.jackson.core.base.ParserMinimalBase._reportError(ParserMinimalBase.java:752)\n\tat com.fasterxml.jackson.core.base.ParserMinimalBase._reportUnexpectedChar(ParserMinimalBase.java:676)\n\tat com.fasterxml.jackson.core.json.UTF8StreamJsonParser._handleUnexpectedValue(UTF8StreamJsonParser.java:2761)\n\tat com.fasterxml.jackson.core.json.UTF8StreamJsonParser._nextTokenNotInObject(UTF8StreamJsonParser.java:911)\n\tat com.fasterxml.jackson.core.json.UTF8StreamJsonParser.nextToken(UTF8StreamJsonParser.java:797)\n\tat com.fasterxml.jackson.databind.ObjectMapper._readTreeAndClose(ObjectMapper.java:4928)\n\tat com.fasterxml.jackson.databind.ObjectMapper.readTree(ObjectMapper.java:3292)\n\tat org.apache.kafka.connect.json.JsonDeserializer.deserialize(JsonDeserializer.java:67)\n\t... 19 more\n"}],"type":"sink"}t
+
+
+
+
+
+[appuser@ac0444bf7c9d ~]$ kafka-console-consumer --topic SyslogProcessed --bootstrap-server kafka1:29092
+{"TIMESTAMP":"2025-03-19T10:18:19+00:00","HOSTNAME":"tranhien-Virtual-Machine","MESSAGE":"This is a test message 2706"}
+{"TIMESTAMP":"2025-03-19T10:27:06+00:00","HOSTNAME":"48806fc03cfc","MESSAGE":"-- MARK --"}
+
+tranhien@tranhien-Virtual-Machine:~/de_project$ tree connectors/
+connectors/
+└── mongo-kafka-connect-1.15.0-confluent.jar
+
+
+
+
+tranhien@tranhien-Virtual-Machine:~/de_project$ docker exec -it kafka1 bash
+[appuser@ac0444bf7c9d ~]$ kafka-console-consumer --topic SyslogProcessed --bootstrap-server kafka1:29092
+{"TIMESTAMP":"2025-03-20T03:03:08+00:00","HOSTNAME":"tranhien-Virtual-Machine","MESSAGE":"This is a test message 2706"}
+
+
+
+send message 10KB/s
+RAM 7GB
+gauge in 15 min
+tranhien@tranhien-Virtual-Machine 
+ OS: Ubuntu 20.04.6 LTS x86_64 
+Host: Virtual Machine Hyper-V UEFI Release v4.1 
+Kernel: 5.4.0-208-generic 
+Uptime: 3 hours, 29 mins 
+Packages: 1709 (dpkg), 7 (snap) 
+Shell: bash 5.0.17 
+Resolution: 1280x800 
+DE: GNOME 
+WM: Mutter 
+WM Theme: Adwaita 
+  Theme: Yaru [GTK2/3] 
+   Icons: Yaru [GTK2/3] 
+     Terminal: gnome-terminal 
+CPU: Intel i5-8500 (4) @ 3.500GHz 
+
+scenario 1
+mean latency captured: 1.51s
+median: 1.68s
+min: 719ms
+max: 2.27s
+
+scenario 2
+mean latency captured: 501ms
+median: 438 ms
+min: 212 ms
+max: 936 ms
+
+scenario 3
+mean latency captured: 753ms
+median: 750ms
+min: 583ms
+max: 882ms
+
+
+
+
+
+
+
+
+apply minIO ?
+
+
+
+
+
+
+
+

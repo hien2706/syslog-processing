@@ -1,0 +1,9 @@
+FROM bitnami/spark:3.5.2
+
+USER root
+# Ensure apt list directory exists, then update and install pip
+RUN apt-get update && apt-get install python3-pip -y
+
+# Copy PySpark_requirements.txt and install Python dependencies
+COPY PySpark_requirements.txt /app/
+RUN pip3 install -r /app/PySpark_requirements.txt
